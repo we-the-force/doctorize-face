@@ -1,4 +1,4 @@
-const classes = ['amy', 'bernadette', 'howard', 'leonard', 'penny', 'raj', 'sheldon', 'stuart']
+const classes = ['amy', 'bernadette', 'howard', 'leonard', 'penny', 'pope', 'raj', 'sheldon', 'stuart']
 
 function getFaceImageUri(className, idx) {
   return `${className}/${className}${idx}.png`

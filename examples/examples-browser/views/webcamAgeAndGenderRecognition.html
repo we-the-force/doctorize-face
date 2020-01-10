@@ -4,6 +4,8 @@
   <script src="face-api.js"></script>
   <script src="js/commons.js"></script>
   <script src="js/faceDetectionControls.js"></script>
+  <!-- <script src="js/imageSelectionControls.js"></script> -->
+  <script src="js/bbt.js"></script>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.100.2/css/materialize.css">
   <script type="text/javascript" src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
@@ -138,6 +140,7 @@
     }
 
     async function onPlay() {
+      
       const videoEl = $('#inputVideo').get(0)
 
       if(videoEl.paused || videoEl.ended || !isFaceDetectionModelLoaded())
@@ -145,45 +148,72 @@
 
 
       const options = getFaceDetectorOptions()
+      const results = await faceapi
+        .detectAllFaces(videoEl, options)
+        .withFaceLandmarks()
+        .withFaceDescriptors()
+        if (results) {
+          const canvas = $('#overlay').get(0);
+          console.log('height: '+videoEl.height);
 
-      const ts = Date.now()
+      const dims = faceapi.matchDimensions(canvas, videoEl, true);
+        const resizedResult = faceapi.resizeResults(results, {"width":480,"height":640})
 
-      const result = await faceapi.detectSingleFace(videoEl, options)
-        .withAgeAndGender()
-
-      updateTimeStats(Date.now() - ts)
-
-      if (result) {
-        const canvas = $('#overlay').get(0)
-        const dims = faceapi.matchDimensions(canvas, videoEl, true)
-
-        const resizedResult = faceapi.resizeResults(result, dims)
-        if (withBoxes) {
-          faceapi.draw.drawDetections(canvas, resizedResult)
-        }
-        const { age, gender, genderProbability } = resizedResult
-
-        // interpolate gender predictions over last 30 frames
-        // to make the displayed age more stable
-        const interpolatedAge = interpolateAgePredictions(age)
-        new faceapi.draw.DrawTextField(
-          [
-            `${faceapi.utils.round(interpolatedAge, 0)} years`,
-            `${gender} (${faceapi.utils.round(genderProbability)})`
-          ],
-          result.detection.box.bottomLeft
-        ).draw(canvas)
+      // faceapi.matchDimensions(canvas, videoEl)
+      // resize detection and landmarks in case displayed image is smaller than
+      // original size
+      console.log(resizedResult);
+      
+      resizedResult.forEach(({ detection, descriptor }) => {
+        const label = faceMatcher.findBestMatch(descriptor).toString()
+        const options = { label }
+        const drawBox = new faceapi.draw.DrawBox(detection.box, options)
+        drawBox.draw(canvas)
+      })
       }
+      // const ts = Date.now()
+
+      // const result = await faceapi.detectSingleFace(videoEl, options)
+      //   .withAgeAndGender()
+
+      // updateTimeStats(Date.now() - ts)
+
+      // if (result) {
+      //   const canvas = $('#overlay').get(0)
+      //   const dims = faceapi.matchDimensions(canvas, videoEl, true)
+
+      //   const resizedResult = faceapi.resizeResults(result, dims)
+      //   if (withBoxes) {
+      //     faceapi.draw.drawDetections(canvas, resizedResult)
+      //   }
+      //   const { age, gender, genderProbability } = resizedResult
+
+      //   // interpolate gender predictions over last 30 frames
+      //   // to make the displayed age more stable
+      //   const interpolatedAge = interpolateAgePredictions(age)
+      //   new faceapi.draw.DrawTextField(
+      //     [
+      //       `${faceapi.utils.round(interpolatedAge, 0)} years`,
+      //       `${gender} (${faceapi.utils.round(genderProbability)})`
+      //     ],
+      //     result.detection.box.bottomLeft
+      //   ).draw(canvas)
+      // }
 
       setTimeout(() => onPlay())
     }
 
+    
+
     async function run() {
       // load face detection and face expression recognition models
-      await changeFaceDetector(TINY_FACE_DETECTOR)
-      await faceapi.nets.ageGenderNet.load('/')
+      /* await changeFaceDetector(TINY_FACE_DETECTOR)
+      await faceapi.nets.ageGenderNet.load('/') */
+      await changeFaceDetector(selectedFaceDetector)
+      await faceapi.loadFaceLandmarkModel('/')
+      await faceapi.loadFaceRecognitionModel('/')
       changeInputSize(224)
-
+      faceMatcher = await createBbtFaceMatcher(1)
       // try to access users webcam and stream the images
       // to the video element
       const stream = await navigator.mediaDevices.getUserMedia({ video: {} })
@@ -195,6 +225,7 @@
 
     $(document).ready(function() {
       renderNavBar('#navbar', 'webcam_age_and_gender_recognition')
+        // initImageSelectionControls()
       initFaceDetectionControls()
       run()
     })
